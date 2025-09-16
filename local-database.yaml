@@ -23,9 +23,53 @@ services:
     networks:
       - authnet
 
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    restart: always
+    env_file:
+      - .env
+    environment:
+      ZOOKEEPER_CLIENT_PORT: ${KAFKA_ZOOKEEPER_CLIENT_PORT:-2181}
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - authnet
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    restart: always
+    env_file:
+      - .env
+    environment:
+      KAFKA_BROKER_ID: ${KAFKA_BROKER_ID}
+      KAFKA_ZOOKEEPER_CONNECT: ${KAFKA_ZOOKEEPER_CONNECT}
+      KAFKA_LISTENERS: ${KAFKA_LISTENERS}
+      KAFKA_ADVERTISED_LISTENERS: ${KAFKA_ADVERTISED_LISTENERS}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR}
+    ports:
+      - "9092:9092"
+    networks:
+      - authnet
+
+  provectus-ui:
+    image: provectuslabs/kafka-ui:latest
+    restart: always
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    ports:
+      - "8080:8080"
+    networks:
+      - authnet
+
 volumes:
   postgres_data:
   pgadmin_data:
+
+  kafka_data:
+  zookeeper_data:
 
 networks:
   authnet:

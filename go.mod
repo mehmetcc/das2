@@ -5,6 +5,8 @@ go 1.24.2
 require go.uber.org/zap v1.27.0
 
 require (
+	github.com/go-chi/chi v1.5.4 // indirect
+	github.com/go-chi/chi/v5 v5.2.3 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
@@ -20,4 +22,5 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/pressly/goose/v3 v3.25.0
 	go.uber.org/multierr v1.11.0 // indirect
+	moul.io/chizap v1.0.3
 )
