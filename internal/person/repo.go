@@ -36,7 +36,7 @@ func NewPersonRepo(db *sql.DB, logger *zap.Logger) PersonRepo {
 }
 
 const (
-	insertPersonQuery = `
+	createPersonQuery = `
 						INSERT INTO persons (email, username, password, role, is_active, is_deleted)
 						VALUES ($1, $2, $3, $4, $5, $6)
 						RETURNING id, public_id, created_at, updated_at
@@ -53,7 +53,7 @@ const (
 func (p *personRepo) Create(ctx context.Context, dto *PersonDTO) (id.PublicID, error) {
 	// I must admit, this wasn't working until I rewrote everything with Claude
 	row := p.db.QueryRowContext(ctx,
-		insertPersonQuery,
+		createPersonQuery,
 		strings.ToLower(strings.TrimSpace(dto.Email)),
 		strings.TrimSpace(dto.Username),
 		dto.Password,
