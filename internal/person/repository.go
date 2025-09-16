@@ -17,10 +17,10 @@ type PersonRepository interface {
 
 type personRepository struct {
 	db     *sql.DB
-	logger zap.Logger
+	logger *zap.Logger
 }
 
-func NewPersonRepository(db *sql.DB, logger zap.Logger) PersonRepository {
+func NewPersonRepository(db *sql.DB, logger *zap.Logger) PersonRepository {
 	return &personRepository{
 		db:     db,
 		logger: logger,
