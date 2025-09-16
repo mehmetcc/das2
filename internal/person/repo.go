@@ -58,7 +58,7 @@ func (p *personRepo) Create(ctx context.Context, dto *PersonDTO) (id.PublicID, e
 		strings.TrimSpace(dto.Username),
 		dto.Password,
 		RoleUser,
-		false,
+		true, // TODO: set false after email verification implementation
 		false,
 	)
 
