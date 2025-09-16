@@ -11,7 +11,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
+	"github.com/mehmetcc/das2/internal/auth"
 	"github.com/mehmetcc/das2/internal/database"
+	"github.com/mehmetcc/das2/internal/person"
 	"go.uber.org/zap"
 	"moul.io/chizap"
 )
@@ -58,6 +60,13 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("It is alive!"))
 	})
+
+	// initialize auth components
+	personRepo := person.NewPersonRepo(db, logger)
+
+	authService := auth.NewAuthenticationService(personRepo, logger)
+	authHandler := auth.NewAuthenticationHandler(authService, logger)
+	router.Mount("/auth", authHandler.Routes())
 
 	// generate and run a server
 	// TODO: configure
