@@ -90,9 +90,31 @@ func (a *authenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	/** Business logic */
-	a.authService.Login(ctx, req.Email, req.Password)
-	httpx.WriteJSON(w, http.StatusCreated, loginPersonResponse{
-		TokenOfSomeSort: "TODO",
+	token, err := a.authService.Login(ctx, req.Email, req.Password)
+	if err != nil {
+		a.logger.Warn("failed to login user", zap.Error(err))
+		switch err {
+		case ErrWrongPassword, ErrWrongEmail, ErrWrongUsername, ErrUserNotActive:
+			httpx.WriteError(w, http.StatusUnauthorized, httpx.ErrorResponse[any]{
+				Code:    httpx.ErrUnauthorized,
+				Message: err.Error(),
+			})
+		case person.ErrPersonNotFound:
+			httpx.WriteError(w, http.StatusNotFound, httpx.ErrorResponse[any]{
+				Code:    httpx.ErrNotFound,
+				Message: "user not found",
+			})
+		default:
+			a.logger.Error("internal server error", zap.Error(err))
+			httpx.WriteError(w, http.StatusInternalServerError, httpx.ErrorResponse[any]{
+				Code:    httpx.ErrInternal,
+				Message: "internal server error",
+			})
+		}
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, loginPersonResponse{
+		TokenOfSomeSort: token,
 	})
 }
 
@@ -168,7 +190,6 @@ func (a *authenticationHandler) Register(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}
-
 	httpx.WriteJSON(w, http.StatusCreated, registerPersonResponse{
 		PublicID: string(id),
 	})
