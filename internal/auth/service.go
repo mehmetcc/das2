@@ -54,13 +54,16 @@ func (a *authService) Login(ctx context.Context, email, password string) (string
 
 	// compare email & password & activeness
 	if !p.IsActive {
+		a.logger.Warn("user not active", zap.String("email", email))
 		return "", ErrUserNotActive
 	}
 	if p.Email != email {
-		return "", ErrWrongEmail
+		a.logger.Warn("wrong email", zap.String("email", email))
+		return "", ErrInvalidCredentials
 	}
-	if bcrypt.CompareHashAndPassword([]byte(p.Password), []byte(password)); err != nil {
-		return "", ErrWrongPassword
+	if err = bcrypt.CompareHashAndPassword([]byte(p.Password), []byte(password)); err != nil {
+		a.logger.Warn("wrong password", zap.String("email", email))
+		return "", ErrInvalidCredentials
 	}
 
 	return "", nil

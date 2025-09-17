@@ -3,8 +3,6 @@ package auth
 import "errors"
 
 var (
-	ErrWrongPassword = errors.New("wrong password")
-	ErrWrongUsername = errors.New("wrong username")
-	ErrWrongEmail    = errors.New("wrong email")
-	ErrUserNotActive = errors.New("user not active")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserNotActive      = errors.New("user not active")
 )

@@ -12,6 +12,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/mehmetcc/das2/internal/httpx"
 	"github.com/mehmetcc/das2/internal/person"
+	"github.com/mehmetcc/das2/internal/session"
 	"go.uber.org/zap"
 )
 
@@ -44,6 +45,37 @@ func (a *authenticationHandler) Routes() chi.Router {
 }
 
 func (a *authenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
+	/** extract headers */
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip != "" {
+		ip = strings.Split(ip, ",")[0]
+		ip = strings.TrimSpace(ip)
+	} else {
+		ip = r.RemoteAddr
+		if colon := strings.LastIndex(ip, ":"); colon != -1 {
+			ip = ip[:colon]
+		}
+	}
+	deviceMeta := httpx.DeviceMeta{
+		DeviceID:   r.Header.Get("X-Device-Id"),
+		DeviceName: r.Header.Get("X-Device-Name"),
+		Platform:   httpx.Platform(r.Header.Get("X-Client-Platform")),
+		AppVersion: r.Header.Get("X-App-Version"),
+		UserAgent:  r.UserAgent(),
+		IP:         ip,
+	}
+	if err := a.validator.Struct(deviceMeta); err != nil {
+		a.logger.Warn("DeviceMeta validation failed", zap.Error(err))
+		fields := httpx.ValidationDetails(err)
+		httpx.WriteError(w, http.StatusBadRequest, httpx.ErrorResponse[[]httpx.FieldError]{
+			Code:    httpx.ErrValidationFailed,
+			Message: "device meta validation failed",
+			Details: fields,
+		})
+		return
+	}
+	a.logger.Debug("DeviceMeta", zap.Any("device_meta", deviceMeta))
+
 	/** common checks for all endpoints */
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
@@ -94,14 +126,14 @@ func (a *authenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.logger.Warn("failed to login user", zap.Error(err))
 		switch err {
-		case ErrWrongPassword, ErrWrongEmail, ErrWrongUsername, ErrUserNotActive:
+		case ErrInvalidCredentials, ErrUserNotActive:
 			httpx.WriteError(w, http.StatusUnauthorized, httpx.ErrorResponse[any]{
 				Code:    httpx.ErrUnauthorized,
-				Message: err.Error(),
+				Message: "invalid credentials",
 			})
 		case person.ErrPersonNotFound:
-			httpx.WriteError(w, http.StatusNotFound, httpx.ErrorResponse[any]{
-				Code:    httpx.ErrNotFound,
+			httpx.WriteError(w, http.StatusUnauthorized, httpx.ErrorResponse[any]{
+				Code:    httpx.ErrUnauthorized,
 				Message: "user not found",
 			})
 		default:
@@ -113,12 +145,44 @@ func (a *authenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, loginPersonResponse{
-		TokenOfSomeSort: token,
+	httpx.WriteJSON(w, http.StatusOK, loginResponse{
+		AccessToken: token,
+		// Fill other fields as needed
 	})
 }
 
 func (a *authenticationHandler) Register(w http.ResponseWriter, r *http.Request) {
+	/** extract headers */
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip != "" {
+		ip = strings.Split(ip, ",")[0]
+		ip = strings.TrimSpace(ip)
+	} else {
+		ip = r.RemoteAddr
+		if colon := strings.LastIndex(ip, ":"); colon != -1 {
+			ip = ip[:colon]
+		}
+	}
+	deviceMeta := httpx.DeviceMeta{
+		DeviceID:   r.Header.Get("X-Device-Id"),
+		DeviceName: r.Header.Get("X-Device-Name"),
+		Platform:   httpx.Platform(r.Header.Get("X-Client-Platform")),
+		AppVersion: r.Header.Get("X-App-Version"),
+		UserAgent:  r.UserAgent(),
+		IP:         ip,
+	}
+	if err := a.validator.Struct(deviceMeta); err != nil {
+		a.logger.Warn("DeviceMeta validation failed", zap.Error(err))
+		fields := httpx.ValidationDetails(err)
+		httpx.WriteError(w, http.StatusBadRequest, httpx.ErrorResponse[[]httpx.FieldError]{
+			Code:    httpx.ErrValidationFailed,
+			Message: "device meta validation failed",
+			Details: fields,
+		})
+		return
+	}
+	a.logger.Debug("DeviceMeta", zap.Any("device_meta", deviceMeta))
+
 	/** common checks for all endpoints **/
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
@@ -198,7 +262,7 @@ func (a *authenticationHandler) Register(w http.ResponseWriter, r *http.Request)
 type registerPersonRequest struct {
 	Email    string `json:"email"    validate:"required,email"`
 	Username string `json:"username" validate:"required,min=8,max=32"`
-	Password string `json:"password" validate:"required,min=8,max=72,alphanum"`
+	Password string `json:"password" validate:"required,min=8,max=72"`
 }
 
 type registerPersonResponse struct {
@@ -207,9 +271,14 @@ type registerPersonResponse struct {
 
 type loginPersonRequest struct {
 	Email    string `json:"email"    validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8,max=72,alphanum"`
+	Password string `json:"password" validate:"required,min=8,max=72"`
 }
 
-type loginPersonResponse struct {
-	TokenOfSomeSort string `json:"token"`
+// for native. for web, we'll set the refresh token as an HttpOnly cookie.
+type loginResponse struct {
+	AccessToken      string                 `json:"access_token"`
+	AccessExpiresIn  int64                  `json:"access_expires_in"`       // seconds
+	RefreshToken     string                 `json:"refresh_token,omitempty"` // omit for web cookie flow
+	RefreshExpiresIn int64                  `json:"refresh_expires_in"`      // seconds
+	Session          session.SessionSummary `json:"session"`
 }
