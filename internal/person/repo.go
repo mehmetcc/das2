@@ -45,7 +45,7 @@ const (
 
 /**
  * Go is usually written by people who claims to hate boilerplate, Java code.
- * Those people hate Hibernate, Spring, any crap Microsoft comes up with for C# etc.
+ * Those people hate Hibernate, Spring, or the crap Microsoft comes up with for C# etc.
  * And then they write 50 lines of boilerplate to insert a single record into a database.
  * The only way to access a database is either a raw SQL query, or an ORM that is just like Hibernate, but worse.
  * How this ecosystem is even worth the hype amk?
