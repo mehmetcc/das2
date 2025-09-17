@@ -21,6 +21,7 @@ type PersonDTO struct {
 
 type PersonRepo interface {
 	Create(ctx context.Context, dto *PersonDTO) (id.PublicID, error)
+	FindByEmail(ctx context.Context, email string) (*Person, error)
 }
 
 type personRepo struct {
@@ -40,6 +41,11 @@ const (
 						INSERT INTO persons (email, username, password, role, is_active, is_deleted)
 						VALUES ($1, $2, $3, $4, $5, $6)
 						RETURNING id, public_id, created_at, updated_at
+						`
+	findByEmailQuery = `
+						SELECT id, public_id, email, username, password, role, is_active, is_deleted, created_at, updated_at
+						FROM persons
+						WHERE email = $1 AND is_deleted = false
 						`
 )
 
@@ -126,4 +132,33 @@ func (p *personRepo) Create(ctx context.Context, dto *PersonDTO) (id.PublicID, e
 	)
 
 	return publicID, nil
+}
+
+func (p *personRepo) FindByEmail(ctx context.Context, email string) (*Person, error) {
+	row := p.db.QueryRowContext(ctx, findByEmailQuery, strings.ToLower(strings.TrimSpace(email)))
+
+	var person Person
+	if err := row.Scan(
+		&person.ID,
+		&person.PublicID,
+		&person.Email,
+		&person.Username,
+		&person.Password,
+		&person.Role,
+		&person.IsActive,
+		&person.IsDeleted,
+		&person.CreatedAt,
+		&person.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPersonNotFound
+		}
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			p.logger.Warn("find by email canceled/timed out", zap.Error(err))
+			return nil, err
+		}
+		p.logger.Error("failed to scan person by email", zap.Error(err))
+		return nil, err
+	}
+	return &person, nil
 }

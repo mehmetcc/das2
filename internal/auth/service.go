@@ -11,6 +11,7 @@ import (
 
 type AuthService interface {
 	Register(ctx context.Context, email, username, password string) (id.PublicID, error)
+	Login(ctx context.Context, email, password string) (string, error)
 }
 
 type authService struct {
@@ -42,4 +43,25 @@ func (a *authService) Register(ctx context.Context, email, username, password st
 	}
 
 	return id, nil
+}
+
+func (a *authService) Login(ctx context.Context, email, password string) (string, error) {
+	p, err := a.personRepo.FindByEmail(ctx, email)
+	if err != nil {
+		a.logger.Error("failed to find person by email", zap.Error(err))
+		return "", err
+	}
+
+	// compare email & password & activeness
+	if !p.IsActive {
+		return "", ErrUserNotActive
+	}
+	if p.Email != email {
+		return "", ErrWrongEmail
+	}
+	if bcrypt.CompareHashAndPassword([]byte(p.Password), []byte(password)); err != nil {
+		return "", ErrWrongPassword
+	}
+
+	return "", nil
 }

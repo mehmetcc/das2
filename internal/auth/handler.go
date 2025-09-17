@@ -17,6 +17,7 @@ import (
 
 type AuthenticationHandler interface {
 	Register(w http.ResponseWriter, r *http.Request)
+	Login(w http.ResponseWriter, r *http.Request)
 	Routes() chi.Router
 }
 
@@ -38,7 +39,61 @@ func NewAuthenticationHandler(authService AuthService, l *zap.Logger) Authentica
 func (a *authenticationHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/register", a.Register)
+	r.Post("/login", a.Login)
 	return r
+}
+
+func (a *authenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
+	/** common checks for all endpoints */
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		httpx.WriteError(w, http.StatusUnsupportedMediaType, httpx.ErrorResponse[any]{
+			Code:    httpx.ErrUnsupportedMedia,
+			Message: "Content-Type must be application/json",
+		})
+		return
+	}
+
+	/** unmarshal & validate here */
+	var req loginPersonRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		a.logger.Warn("failed to decode login request body", zap.Error(err))
+		httpx.WriteError(w, http.StatusBadRequest, httpx.ErrorResponse[any]{
+			Code:    httpx.ErrInvalidJSON,
+			Message: "invalid request body",
+		})
+		return
+	}
+
+	if err := dec.Decode(&struct{}{}); err != io.EOF { // check if there's any trailing data
+		a.logger.Warn("trailing data after JSON body", zap.Error(err))
+		httpx.WriteError(w, http.StatusBadRequest, httpx.ErrorResponse[any]{
+			Code:    httpx.ErrInvalidJSON,
+			Message: "request body must contain a single JSON object",
+		})
+		return
+	}
+
+	if err := a.validator.Struct(req); err != nil {
+		a.logger.Warn("login validation failed", zap.Error(err))
+		fields := httpx.ValidationDetails(err)
+		httpx.WriteError(w, http.StatusUnprocessableEntity, httpx.ErrorResponse[[]httpx.FieldError]{
+			Code:    httpx.ErrValidationFailed,
+			Message: "validation failed",
+			Details: fields,
+		})
+		return
+	}
+
+	/** Business logic */
+	a.authService.Login(ctx, req.Email, req.Password)
+	httpx.WriteJSON(w, http.StatusCreated, loginPersonResponse{
+		TokenOfSomeSort: "TODO",
+	})
 }
 
 func (a *authenticationHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -122,9 +177,18 @@ func (a *authenticationHandler) Register(w http.ResponseWriter, r *http.Request)
 type registerPersonRequest struct {
 	Email    string `json:"email"    validate:"required,email"`
 	Username string `json:"username" validate:"required,min=8,max=32"`
-	Password string `json:"password" validate:"required,min=8,,max=72,alphanum"`
+	Password string `json:"password" validate:"required,min=8,max=72,alphanum"`
 }
 
 type registerPersonResponse struct {
 	PublicID string `json:"public_id"`
+}
+
+type loginPersonRequest struct {
+	Email    string `json:"email"    validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8,max=72,alphanum"`
+}
+
+type loginPersonResponse struct {
+	TokenOfSomeSort string `json:"token"`
 }
