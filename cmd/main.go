@@ -16,6 +16,7 @@ import (
 	"github.com/mehmetcc/das2/internal/auth"
 	"github.com/mehmetcc/das2/internal/database"
 	"github.com/mehmetcc/das2/internal/person"
+	"github.com/mehmetcc/das2/internal/session"
 	"go.uber.org/zap"
 	"moul.io/chizap"
 )
@@ -78,10 +79,12 @@ func main() {
 		_, _ = w.Write([]byte("It is alive!"))
 	})
 
-	// initialize auth components
+	// initialize components
 	personRepo := person.NewPersonRepo(db, logger)
 
-	authService := auth.NewAuthenticationService(personRepo, logger)
+	sessionRepo := session.NewSessionRepo(db, logger)
+
+	authService := auth.NewAuthenticationService(personRepo, sessionRepo, logger)
 	authHandler := auth.NewAuthenticationHandler(authService, logger)
 	router.Mount("/auth", authHandler.Routes())
 

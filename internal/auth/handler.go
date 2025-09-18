@@ -122,7 +122,15 @@ func (a *authenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	/** Business logic */
-	token, err := a.authService.Login(ctx, req.Email, req.Password)
+	session := session.SessionSummary{
+		DeviceID:   deviceMeta.DeviceID,
+		DeviceName: deviceMeta.DeviceName,
+		Platform:   deviceMeta.Platform,
+		CreatedAt:  time.Now(),
+		LastUsedIP: deviceMeta.IP,
+		UserAgent:  deviceMeta.UserAgent,
+	}
+	token, err := a.authService.Login(ctx, req.Email, req.Password, session)
 	if err != nil {
 		a.logger.Warn("failed to login user", zap.Error(err))
 		switch err {

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/mehmetcc/das2/internal/person"
+	"github.com/mehmetcc/das2/internal/session"
 	"github.com/mehmetcc/das2/pkg/id"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
@@ -11,18 +12,20 @@ import (
 
 type AuthService interface {
 	Register(ctx context.Context, email, username, password string) (id.PublicID, error)
-	Login(ctx context.Context, email, password string) (string, error)
+	Login(ctx context.Context, email, password string, session session.SessionSummary) (string, error)
 }
 
 type authService struct {
-	personRepo person.PersonRepo
-	logger     *zap.Logger
+	personRepo  person.PersonRepo
+	sessionRepo session.SessionRepo
+	logger      *zap.Logger
 }
 
-func NewAuthenticationService(personRepo person.PersonRepo, logger *zap.Logger) AuthService {
+func NewAuthenticationService(personRepo person.PersonRepo, sessionRepo session.SessionRepo, logger *zap.Logger) AuthService {
 	return &authService{
-		personRepo: personRepo,
-		logger:     logger,
+		personRepo:  personRepo,
+		sessionRepo: sessionRepo,
+		logger:      logger,
 	}
 }
 
@@ -45,7 +48,7 @@ func (a *authService) Register(ctx context.Context, email, username, password st
 	return id, nil
 }
 
-func (a *authService) Login(ctx context.Context, email, password string) (string, error) {
+func (a *authService) Login(ctx context.Context, email, password string, session session.SessionSummary) (string, error) {
 	p, err := a.personRepo.FindByEmail(ctx, email)
 	if err != nil {
 		a.logger.Error("failed to find person by email", zap.Error(err))
@@ -66,5 +69,6 @@ func (a *authService) Login(ctx context.Context, email, password string) (string
 		return "", ErrInvalidCredentials
 	}
 
+	a.sessionRepo.Create(ctx, session)
 	return "", nil
 }
