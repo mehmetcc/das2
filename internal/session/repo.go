@@ -36,7 +36,7 @@ func NewSessionRepo(db *sql.DB, logger *zap.Logger) SessionRepo {
 }
 
 func (s *sessionRepo) Create(ctx context.Context, summary SessionSummary) (id.SessionID, error) {
-	var id id.SessionID
+	var sid string
 	err := s.db.QueryRowContext(ctx, createSessionQuery,
 		summary.PersonID,
 		summary.DeviceID,
@@ -45,12 +45,12 @@ func (s *sessionRepo) Create(ctx context.Context, summary SessionSummary) (id.Se
 		summary.CreatedAt,
 		summary.LastUsedIP,
 		summary.UserAgent,
-	).Scan(&id)
+	).Scan(&sid)
 	if err != nil {
 		s.logger.Error("failed to create session", zap.Error(err))
 		return "", err
 	}
-	return id, nil
+	return id.SessionID(sid), nil
 }
 
 func (s *sessionRepo) Delete(ctx context.Context, id string) error {
