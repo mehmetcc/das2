@@ -126,7 +126,6 @@ func (a *authenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
 		DeviceID:   deviceMeta.DeviceID,
 		DeviceName: deviceMeta.DeviceName,
 		Platform:   deviceMeta.Platform,
-		CreatedAt:  time.Now(),
 		LastUsedIP: deviceMeta.IP,
 		UserAgent:  deviceMeta.UserAgent,
 	}
