@@ -16,14 +16,14 @@ type SessionRepo interface {
 
 const (
 	createSessionQuery = `
-		INSERT INTO sessions (
-			person_id, device_id, device_name, platform, created_at, last_used_ip, user_agent
-		) VALUES ($1, $2, $3, $4, COALESCE($5, now()), $6, $7)
-		RETURNING id
-	`
+						INSERT INTO sessions (
+						person_id, device_id, device_name, platform, created_at, last_used_ip, user_agent
+						) VALUES ($1, $2, $3, $4, COALESCE($5, now()), $6, $7)
+						RETURNING id
+						`
 	deleteSessionQuery = `
-		DELETE FROM sessions WHERE id = $1
-	`
+						DELETE FROM sessions WHERE id = $1
+						`
 )
 
 type sessionRepo struct {

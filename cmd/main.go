@@ -12,8 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
-	"github.com/joho/godotenv"
 	"github.com/mehmetcc/das2/internal/auth"
+	"github.com/mehmetcc/das2/internal/config"
 	"github.com/mehmetcc/das2/internal/database"
 	"github.com/mehmetcc/das2/internal/person"
 	"github.com/mehmetcc/das2/internal/session"
@@ -29,13 +29,14 @@ func main() {
 	}
 	defer logger.Sync()
 
-	// load dotenv file
-	if err := godotenv.Load("../.env"); err != nil {
-		logger.Error("failed to load .env file", zap.Error(err))
+	// load config
+	cfg, err := config.LoadConfig(logger)
+	if err != nil {
+		logger.Panic("err loading config", zap.Error(err))
 	}
 
 	// load database
-	db, err := database.Init()
+	db, err := database.Init(cfg)
 	if err != nil {
 		logger.Fatal("failed to initialize database", zap.Error(err))
 	}
@@ -64,6 +65,8 @@ func main() {
 		10*time.Second, // per duration
 		httprate.WithKeyFuncs(httprate.KeyByIP, httprate.KeyByEndpoint),
 	))
+	// I took this directly from cors middleware github readme
+	// TODO: investigate if this is suitable for this app
 	router.Use(cors.Handler(cors.Options{
 		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
 		AllowedOrigins: []string{"https://*", "http://*"},
@@ -89,13 +92,12 @@ func main() {
 	router.Mount("/auth", authHandler.Routes())
 
 	// generate and run a server
-	// TODO: configure
 	server := &http.Server{
-		Addr:         ":666",
+		Addr:         cfg.AppConfig.Port,
 		Handler:      router,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  cfg.AppConfig.ReadTimeout,
+		WriteTimeout: cfg.AppConfig.WriteTimeout,
+		IdleTimeout:  cfg.AppConfig.IdleTimeout,
 	}
 	errCh := make(chan error, 1)
 	go func() {

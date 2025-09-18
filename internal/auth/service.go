@@ -70,7 +70,7 @@ func (a *authService) Login(ctx context.Context, email, password string, session
 	}
 
 	session.PersonID = p.ID
-	sessionId, err := a.sessionRepo.Create(ctx, session) // maybe we will like to return session id in the future
+	sessionId, err := a.sessionRepo.Create(ctx, session)
 	if err != nil {
 		return "", err
 	}
