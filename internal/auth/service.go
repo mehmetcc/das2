@@ -69,6 +69,11 @@ func (a *authService) Login(ctx context.Context, email, password string, session
 		return "", ErrInvalidCredentials
 	}
 
-	a.sessionRepo.Create(ctx, session)
+	session.PersonID = p.ID
+	sessionId, err := a.sessionRepo.Create(ctx, session) // maybe we will like to return session id in the future
+	if err != nil {
+		return "", err
+	}
+	a.logger.Debug("created new session", zap.String("sessionId", string(sessionId)))
 	return "", nil
 }

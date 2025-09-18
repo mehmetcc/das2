@@ -22,6 +22,7 @@ type PersonDTO struct {
 type PersonRepo interface {
 	Create(ctx context.Context, dto *PersonDTO) (id.PublicID, error)
 	FindByEmail(ctx context.Context, email string) (*Person, error)
+	FindByPublicID(ctx context.Context, publicID id.PublicID) (*Person, error)
 }
 
 type personRepo struct {
@@ -46,6 +47,11 @@ const (
 						SELECT id, public_id, email, username, password, role, is_active, is_deleted, created_at, updated_at
 						FROM persons
 						WHERE email = $1 AND is_deleted = false
+						`
+	findByPublicIDQuery = `
+						SELECT id, public_id, email, username, password, role, is_active, is_deleted, created_at, updated_at
+						FROM persons
+						WHERE public_id = $1 AND is_deleted = false
 						`
 )
 
@@ -158,6 +164,35 @@ func (p *personRepo) FindByEmail(ctx context.Context, email string) (*Person, er
 			return nil, err
 		}
 		p.logger.Error("failed to scan person by email", zap.Error(err))
+		return nil, err
+	}
+	return &person, nil
+}
+
+func (p *personRepo) FindByPublicID(ctx context.Context, publicID id.PublicID) (*Person, error) {
+	row := p.db.QueryRowContext(ctx, findByPublicIDQuery, strings.TrimSpace(string(publicID)))
+
+	var person Person
+	if err := row.Scan(
+		&person.ID,
+		&person.PublicID,
+		&person.Email,
+		&person.Username,
+		&person.Password,
+		&person.Role,
+		&person.IsActive,
+		&person.IsDeleted,
+		&person.CreatedAt,
+		&person.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPersonNotFound
+		}
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			p.logger.Warn("find by public_id canceled/timed out", zap.Error(err))
+			return nil, err
+		}
+		p.logger.Error("failed to scan person by public_id", zap.Error(err), zap.String("public_id", string(publicID)))
 		return nil, err
 	}
 	return &person, nil

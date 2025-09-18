@@ -1,25 +1,28 @@
+// internal/session/repo.go
 package session
 
 import (
 	"context"
 	"database/sql"
 
+	"github.com/mehmetcc/das2/pkg/id"
 	"go.uber.org/zap"
 )
 
 type SessionRepo interface {
-	Create(ctx context.Context, summary SessionSummary) error
+	Create(ctx context.Context, summary SessionSummary) (id.SessionID, error)
 	Delete(ctx context.Context, id string) error
 }
 
 const (
 	createSessionQuery = `
-		INSERT INTO session_summaries (
-			device_id, device_name, platform, created_at, last_used_ip, user_agent
-		) VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO sessions (
+			person_id, device_id, device_name, platform, created_at, last_used_ip, user_agent
+		) VALUES ($1, $2, $3, $4, COALESCE($5, now()), $6, $7)
+		RETURNING id
 	`
 	deleteSessionQuery = `
-		DELETE FROM session_summaries WHERE id = $1
+		DELETE FROM sessions WHERE id = $1
 	`
 )
 
@@ -29,25 +32,25 @@ type sessionRepo struct {
 }
 
 func NewSessionRepo(db *sql.DB, logger *zap.Logger) SessionRepo {
-	return &sessionRepo{
-		db:     db,
-		logger: logger,
-	}
+	return &sessionRepo{db: db, logger: logger}
 }
 
-func (s *sessionRepo) Create(ctx context.Context, summary SessionSummary) error {
-	_, err := s.db.ExecContext(ctx, createSessionQuery,
+func (s *sessionRepo) Create(ctx context.Context, summary SessionSummary) (id.SessionID, error) {
+	var id id.SessionID
+	err := s.db.QueryRowContext(ctx, createSessionQuery,
+		summary.PersonID,
 		summary.DeviceID,
 		summary.DeviceName,
 		summary.Platform,
 		summary.CreatedAt,
 		summary.LastUsedIP,
 		summary.UserAgent,
-	)
+	).Scan(&id)
 	if err != nil {
 		s.logger.Error("failed to create session", zap.Error(err))
+		return "", err
 	}
-	return err
+	return id, nil
 }
 
 func (s *sessionRepo) Delete(ctx context.Context, id string) error {

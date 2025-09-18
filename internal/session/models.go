@@ -8,6 +8,7 @@ import (
 
 type SessionSummary struct {
 	ID         string         `json:"id"`
+	PersonID   int64          `json:"-"`
 	DeviceID   string         `json:"device_id"`
 	DeviceName string         `json:"device_name,omitempty"`
 	Platform   httpx.Platform `json:"platform,omitempty"`
