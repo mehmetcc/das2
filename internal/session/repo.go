@@ -11,7 +11,8 @@ import (
 
 type SessionRepo interface {
 	Create(ctx context.Context, summary SessionSummary) (id.SessionID, error)
-	Delete(ctx context.Context, id string) error
+	Revoke(ctx context.Context, id string) error
+	TouchLastUsed(ctx context.Context, id id.SessionID, ip, userAgent string) error
 }
 
 const (
@@ -21,9 +22,16 @@ const (
 						) VALUES ($1, $2, $3, $4, COALESCE($5, now()), $6, $7)
 						RETURNING id
 						`
-	deleteSessionQuery = `
-						DELETE FROM sessions WHERE id = $1
-						`
+	revokeSessionQuery = `
+                        DELETE FROM sessions WHERE id = $1
+                        `
+	touchSessionQuery = `
+                        UPDATE sessions
+                        SET last_used_ip = COALESCE($2, last_used_ip),
+                            user_agent = COALESCE($3, user_agent),
+                            last_used_at = now()
+                        WHERE id = $1
+                        `
 )
 
 type sessionRepo struct {
@@ -53,10 +61,18 @@ func (s *sessionRepo) Create(ctx context.Context, summary SessionSummary) (id.Se
 	return id.SessionID(sid), nil
 }
 
-func (s *sessionRepo) Delete(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, deleteSessionQuery, id)
+func (s *sessionRepo) Revoke(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, revokeSessionQuery, id)
 	if err != nil {
 		s.logger.Error("failed to delete session", zap.String("id", id), zap.Error(err))
+	}
+	return err
+}
+
+func (s *sessionRepo) TouchLastUsed(ctx context.Context, sid id.SessionID, ip, userAgent string) error {
+	_, err := s.db.ExecContext(ctx, touchSessionQuery, string(sid), ip, userAgent)
+	if err != nil {
+		s.logger.Error("failed to touch session last_used", zap.String("session_id", string(sid)), zap.Error(err))
 	}
 	return err
 }

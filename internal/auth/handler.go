@@ -41,6 +41,7 @@ func (a *authenticationHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/register", a.Register)
 	r.Post("/login", a.Login)
+	r.Post("/refresh", a.Refresh)
 	return r
 }
 
@@ -129,7 +130,7 @@ func (a *authenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
 		LastUsedIP: deviceMeta.IP,
 		UserAgent:  deviceMeta.UserAgent,
 	}
-	token, err := a.authService.Login(ctx, req.Email, req.Password, session)
+	res, err := a.authService.Login(ctx, req.Email, req.Password, session)
 	if err != nil {
 		a.logger.Warn("failed to login user", zap.Error(err))
 		switch err {
@@ -153,8 +154,11 @@ func (a *authenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, loginResponse{
-		AccessToken: token,
-		// Fill other fields as needed
+		AccessToken:      res.AccessToken,
+		AccessExpiresIn:  res.AccessExpiresAt - time.Now().UTC().Unix(),
+		RefreshToken:     res.RefreshToken,
+		RefreshExpiresIn: res.RefreshExpiresAt - time.Now().UTC().Unix(),
+		Session:          res.Session,
 	})
 }
 
@@ -288,4 +292,83 @@ type loginResponse struct {
 	RefreshToken     string                 `json:"refresh_token,omitempty"` // omit for web cookie flow
 	RefreshExpiresIn int64                  `json:"refresh_expires_in"`      // seconds
 	Session          session.SessionSummary `json:"session"`
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token" validate:"required,min=32"`
+}
+
+func (a *authenticationHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	// placeholder until service wiring is added
+
+	/** extract headers */
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip != "" {
+		ip = strings.Split(ip, ",")[0]
+		ip = strings.TrimSpace(ip)
+	} else {
+		ip = r.RemoteAddr
+		if colon := strings.LastIndex(ip, ":"); colon != -1 {
+			ip = ip[:colon]
+		}
+	}
+	_ = httpx.DeviceMeta{
+		DeviceID:   r.Header.Get("X-Device-Id"),
+		DeviceName: r.Header.Get("X-Device-Name"),
+		Platform:   httpx.Platform(r.Header.Get("X-Client-Platform")),
+		AppVersion: r.Header.Get("X-App-Version"),
+		UserAgent:  r.UserAgent(),
+		IP:         ip,
+	}
+
+	/** common checks for all endpoints **/
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		httpx.WriteError(w, http.StatusUnsupportedMediaType, httpx.ErrorResponse[any]{
+			Code:    httpx.ErrUnsupportedMedia,
+			Message: "Content-Type must be application/json",
+		})
+		return
+	}
+
+	/** unmarshal & validate here */
+
+	var req refreshRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, httpx.ErrorResponse[any]{
+			Code:    httpx.ErrInvalidJSON,
+			Message: "invalid request body",
+		})
+		return
+	}
+	if err := a.validator.Struct(req); err != nil {
+		fields := httpx.ValidationDetails(err)
+		httpx.WriteError(w, http.StatusUnprocessableEntity, httpx.ErrorResponse[[]httpx.FieldError]{
+			Code:    httpx.ErrValidationFailed,
+			Message: "validation failed",
+			Details: fields,
+		})
+		return
+	}
+
+	res, err := a.authService.Refresh(r.Context(), req.RefreshToken, r.UserAgent(), ip, r.Header.Get("X-Device-Id"))
+	if err != nil {
+		a.logger.Warn("refresh failed", zap.Error(err))
+		httpx.WriteError(w, http.StatusUnauthorized, httpx.ErrorResponse[any]{
+			Code:    httpx.ErrUnauthorized,
+			Message: "invalid refresh token",
+		})
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, loginResponse{
+		AccessToken:      res.AccessToken,
+		AccessExpiresIn:  res.AccessExpiresAt - time.Now().UTC().Unix(),
+		RefreshToken:     res.RefreshToken,
+		RefreshExpiresIn: res.RefreshExpiresAt - time.Now().UTC().Unix(),
+		Session:          session.SessionSummary{},
+	})
 }
