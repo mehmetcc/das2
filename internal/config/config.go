@@ -30,6 +30,7 @@ type JWTConfig struct {
 	JWTAudience string
 	JWTAlg      string
 	JWTKID      string
+	JWTSecret   string
 }
 
 type CoookieConfig struct {
@@ -123,6 +124,7 @@ func LoadConfig(logger *zap.Logger) (*Config, error) {
 		JWTAudience: os.Getenv("JWT_AUDIENCE"),
 		JWTAlg:      os.Getenv("JWT_ALG"),
 		JWTKID:      os.Getenv("JWT_KID"),
+		JWTSecret:   os.Getenv("JWT_SECRET"),
 	}
 
 	/** cookie config */

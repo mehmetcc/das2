@@ -17,6 +17,7 @@ import (
 	"github.com/mehmetcc/das2/internal/database"
 	"github.com/mehmetcc/das2/internal/person"
 	"github.com/mehmetcc/das2/internal/session"
+	"github.com/mehmetcc/das2/internal/token"
 	"go.uber.org/zap"
 	"moul.io/chizap"
 )
@@ -84,10 +85,12 @@ func main() {
 
 	// initialize components
 	personRepo := person.NewPersonRepo(db, logger)
-
 	sessionRepo := session.NewSessionRepo(db, logger)
+	refreshRepo := token.NewRefreshTokenRepo(db, logger)
 
-	authService := auth.NewAuthenticationService(personRepo, sessionRepo, logger)
+	tokenService := token.NewTokenService(logger, refreshRepo, cfg.JWTConfig)
+	authService := auth.NewAuthenticationService(personRepo, sessionRepo, tokenService, logger)
+
 	authHandler := auth.NewAuthenticationHandler(authService, logger)
 	router.Mount("/auth", authHandler.Routes())
 
